@@ -2,16 +2,18 @@ import os
 import random
 import csv
 import requests
-import subprocess
 from datetime import datetime
 
-# ========== GitHub Secrets ==========
+# GitHub Secrets
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-# ========== Step 1: Get random idea from CSV ==========
+print("🚀 Luxury Reel Generator Started!")
+print(f"📅 {datetime.now()}")
+
+# Step 1: Get idea
 def get_random_idea():
     try:
         with open("ideas.csv", "r", encoding="utf-8") as f:
@@ -22,56 +24,48 @@ def get_random_idea():
             return idea
     except Exception as e:
         print(f"⚠️ Could not read ideas.csv: {e}")
-        return {"title": "Luxury Villa", "location": "Maldives", "keywords": "luxury villa pool ocean"}
+        return {"title": "Luxury Villa", "category": "Real Estate", "hashtags": "#luxury #realestate", "language": "en"}
 
-# ========== Step 2: Generate caption with Gemini ==========
+# Step 2: Generate caption with Gemini
 def generate_caption(idea):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
-    
-    prompt = f"""Write a short Instagram Reel caption for a luxury property called "{idea.get('title', 'Luxury Villa')}" in {idea.get('location', 'a beautiful location')}.
-Include:
-- 2-3 sentences max
-- 1 call to action (Book via link in bio)
-- 5 relevant hashtags
-Keep it aspirational and exciting."""
-
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    
     try:
-        response = requests.post(url, json=payload, timeout=30)
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        payload = {
+            "contents": [{
+                "parts": [{
+                    "text": f"Write a short Instagram caption for a luxury real estate reel about: {idea['title']}. Include emojis and call to action. Max 200 chars."
+                }]
+            }]
+        }
+        response = requests.post(url, json=payload)
         data = response.json()
         caption = data["candidates"][0]["content"]["parts"][0]["text"]
-        print("✅ Caption generated")
-        return caption
+        print(f"✅ Gemini caption: {caption}")
+        return caption + f"\n\n{idea.get('hashtags', '#luxury')}"
     except Exception as e:
         print(f"⚠️ Gemini failed: {e}, using default caption")
-        return f"✨ {idea.get('title', 'Dream Home')} in {idea.get('location', 'Paradise')} 🏡\n\nYour luxury escape awaits. Book now via link in bio!\n\n#LuxuryRealEstate #LuxuryTravel #DreamHome #Airbnb #LuxuryLiving"
+        return f"✨ {idea['title']} in Paradise 🏡\n\nYour luxury escape awaits. Book now via link in bio!\n\n#LuxuryRealEstate #LuxuryTravel #DreamHome #Airbnb #LuxuryLiving"
 
-# ========== Step 3: Get video from Pexels ==========
-def get_video(idea):
-    keywords = idea.get("keywords", "luxury villa")
-    url = f"https://api.pexels.com/videos/search?query={keywords}&per_page=15&orientation=portrait"
-    headers = {"Authorization": PEXELS_API_KEY}
-    
+# Step 3: Get video from Pexels
+def get_pexels_video(query):
     try:
-        response = requests.get(url, headers=headers, timeout=30)
+        headers = {"Authorization": PEXELS_API_KEY}
+        url = f"https://api.pexels.com/videos/search?query={query}&per_page=5&orientation=portrait"
+        response = requests.get(url, headers=headers)
         data = response.json()
         videos = data["videos"]
         video = random.choice(videos)
-        video_files = video["video_files"]
-        hd_files = [f for f in video_files if f.get("height", 0) >= 720]
-        chosen = hd_files[0] if hd_files else video_files[0]
-        print(f"✅ Video found: {video['id']}")
-        return chosen["link"]
+        video_url = video["video_files"][0]["link"]
+        print(f"✅ Pexels video found: {video_url}")
+        return video_url
     except Exception as e:
         print(f"❌ Pexels failed: {e}")
         return None
 
-# ========== Step 4: Download video ==========
+# Step 4: Download video
 def download_video(video_url):
-    print("⬇️ Downloading video...")
     try:
-        response = requests.get(video_url, stream=True, timeout=60)
+        response = requests.get(video_url, stream=True)
         filename = "reel.mp4"
         with open(filename, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
@@ -83,18 +77,15 @@ def download_video(video_url):
         print(f"❌ Download failed: {e}")
         return None
 
-# ========== Step 5: Send to Telegram ==========
+# Step 5: Send to Telegram
 def send_to_telegram(video_path, caption):
-    print("📤 Sending to Telegram...")
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
-    
     try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
         with open(video_path, "rb") as f:
             response = requests.post(url, data={
                 "chat_id": TELEGRAM_CHAT_ID,
                 "caption": caption[:1024],
             }, files={"video": f}, timeout=120)
-        
         if response.status_code == 200:
             print("✅ Sent to Telegram!")
             return True
@@ -105,36 +96,19 @@ def send_to_telegram(video_path, caption):
         print(f"❌ Telegram failed: {e}")
         return False
 
-# ========== Main ==========
-def main():
-    print("🚀 Luxury Reel Generator Started!")
-    print(f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 50)
+# Main
+idea = get_random_idea()
+caption = generate_caption(idea)
+print(f"📝 Caption:\n{caption}")
 
-    idea = get_random_idea()
-    caption = generate_caption(idea)
-    print(f"\n📝 Caption:\n{caption}\n")
+video_url = get_pexels_video(idea["title"])
+if not video_url:
+    print("❌ No video found. Exiting.")
+    exit(1)
 
-    video_url = get_video(idea)
-    if not video_url:
-        print("❌ No video found. Exiting.")
-        return
+video_path = download_video(video_url)
+if not video_path:
+    print("❌ Download failed. Exiting.")
+    exit(1)
 
-    video_path = download_video(video_url)
-    if not video_path:
-        print("❌ Download failed. Exiting.")
-        return
-
-    success = send_to_telegram(video_path, caption)
-
-    if os.path.exists(video_path):
-        os.remove(video_path)
-        print("🧹 Cleaned up temp file")
-
-    if success:
-        print("\n🎉 Done! Check your Telegram.")
-    else:
-        print("\n❌ Failed to send reel.")
-
-if __name__ == "__main__":
-    main()
+send_to_telegram(video_path, caption)
