@@ -1,0 +1,120 @@
+name: Test API Keys
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🔑 Test Pexels API Key
+        run: |
+          echo "Testing Pexels API..."
+          RESPONSE=$(curl -s \
+            -H "Authorization: ${{ secrets.PEXELS_API_KEY }}" \
+            "https://api.pexels.com/videos/search?query=luxury&per_page=1")
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: ${{ secrets.PEXELS_API_KEY }}" \
+            "https://api.pexels.com/videos/search?query=luxury&per_page=1")
+          echo "Status Code: $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            TOTAL=$(echo $RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_results', 0))")
+            echo "✅ Pexels API KEY is VALID - Total videos: $TOTAL"
+          elif [ "$STATUS" = "401" ]; then
+            echo "❌ Pexels API KEY is INVALID (401 Unauthorized)"
+            echo "👉 Go to: https://www.pexels.com/api/new/ and get a new key"
+          elif [ -z "${{ secrets.PEXELS_API_KEY }}" ]; then
+            echo "❌ PEXELS_API_KEY is NOT SET in GitHub Secrets"
+          else
+            echo "⚠️ Pexels API returned status: $STATUS"
+            echo "Response: $RESPONSE"
+          fi
+
+      - name: 🤖 Test Gemini API Key
+        run: |
+          echo "Testing Gemini API..."
+          RESPONSE=$(curl -s \
+            -X POST \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"contents":[{"parts":[{"text":"Say hello in one word"}]}]}')
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"contents":[{"parts":[{"text":"Say hello in one word"}]}]}')
+          echo "Status Code: $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Gemini API KEY is VALID"
+          elif [ "$STATUS" = "400" ]; then
+            echo "❌ Gemini API: BAD REQUEST"
+            echo "Response: $RESPONSE"
+          elif [ "$STATUS" = "403" ]; then
+            echo "❌ Gemini API KEY is INVALID (403 Forbidden)"
+            echo "👉 Go to: https://aistudio.google.com/apikey and get a new key"
+          elif [ -z "${{ secrets.GEMINI_API_KEY }}" ]; then
+            echo "❌ GEMINI_API_KEY is NOT SET in GitHub Secrets"
+          else
+            echo "⚠️ Gemini API returned status: $STATUS"
+            echo "Response: $RESPONSE"
+          fi
+
+      - name: 📱 Test Telegram Bot Token
+        run: |
+          echo "Testing Telegram Bot..."
+          RESPONSE=$(curl -s \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/getMe")
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/getMe")
+          echo "Status Code: $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            BOT_NAME=$(echo $RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['username'])")
+            echo "✅ Telegram BOT TOKEN is VALID - Bot: @$BOT_NAME"
+          elif [ "$STATUS" = "401" ]; then
+            echo "❌ Telegram BOT TOKEN is INVALID (401 Unauthorized)"
+            echo "👉 Go to @BotFather on Telegram to get a valid token"
+          elif [ -z "${{ secrets.TELEGRAM_BOT_TOKEN }}" ]; then
+            echo "❌ TELEGRAM_BOT_TOKEN is NOT SET in GitHub Secrets"
+          else
+            echo "⚠️ Telegram returned status: $STATUS"
+            echo "Response: $RESPONSE"
+          fi
+
+      - name: 💬 Test Telegram Chat ID
+        run: |
+          echo "Testing Telegram Chat ID..."
+          RESPONSE=$(curl -s \
+            -X POST \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}&text=✅ GitHub Actions Test: All API keys are being verified!")
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}&text=✅ Test message from GitHub Actions")
+          echo "Status Code: $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Telegram CHAT_ID is VALID - Message sent successfully!"
+          elif [ "$STATUS" = "400" ]; then
+            echo "❌ Telegram CHAT_ID is INVALID or WRONG"
+            echo "Response: $RESPONSE"
+            echo "👉 Use @userinfobot on Telegram to get your Chat ID"
+          else
+            echo "⚠️ Telegram Chat returned status: $STATUS"
+            echo "Response: $RESPONSE"
+          fi
+
+      - name: 📊 Final Summary
+        run: |
+          echo ""
+          echo "========================================"
+          echo "         🔍 API KEYS TEST SUMMARY"
+          echo "========================================"
+          echo "Check the steps above for details:"
+          echo "  🔑 Pexels API Key    → See step 1"
+          echo "  🤖 Gemini API Key    → See step 2"
+          echo "  📱 Telegram Token    → See step 3"
+          echo "  💬 Telegram Chat ID  → See step 4"
+          echo "========================================"
+          echo "✅ = Working  |  ❌ = Fix needed"
+          echo "========================================"
