@@ -80,7 +80,7 @@ idea = get_random_idea()
 caption = generate_caption(idea)
 print(f"📝 Caption:\n{caption}")
 
-video_url = get_pexels_video(idea["title"])
+video_url = get_pexels_video(idea["category"])
 if not video_url:
     print("❌ No video found. Exiting.")
     exit(1)
